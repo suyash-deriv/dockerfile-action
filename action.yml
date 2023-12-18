@@ -47,7 +47,7 @@ runs:
       id: build
       uses: docker/build-push-action@v5
       with:
-        push: false
+        push: ${{ inputs.push }}
         tags: ${{ steps.meta.outputs.tags }}
     - name: Run Trivy vulnerability scanner
       uses: aquasecurity/trivy-action@master
@@ -61,8 +61,3 @@ runs:
         severity: 'CRITICAL,HIGH'
         hide-progress: true
         scanners: 'vuln,secret,config'
-    - name: Build and push if required
-      uses: docker/build-push-action@v5
-      with:
-        push: ${{ inputs.push }}
-        tags: ${{ steps.meta.outputs.tags }}
