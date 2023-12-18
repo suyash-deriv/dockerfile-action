@@ -52,7 +52,7 @@ runs:
     - name: Run Trivy vulnerability scanner
       uses: aquasecurity/trivy-action@master
       with:
-        image-ref: ${{ inputs.images }}:${{ steps.meta.outputs.tags }}
+        image-ref: ${{ steps.meta.outputs.tags }}
         scan-type: image
         format: 'table'
         exit-code: '1'
