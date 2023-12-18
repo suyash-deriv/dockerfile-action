@@ -1,0 +1,37 @@
+name: 'Dockerfile Check, Build and Push'
+description: 'A standard Dockerfile workflow to check the dockerfile against standards and build the image. It can also push images to docker hub.'
+author: 'Deriv.com'
+inputs:
+  images:
+    description: 'Image name'
+    required: true
+outputs:
+  imageid:
+    description: 'Image ID'
+    value: ${{ steps.build.imageid }}
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Linter for Dockerfile
+      uses: hadolint/hadolint-action@v3.1.0
+      with:
+        dockerfile: Dockerfile
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    - name: Docker meta
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ inputs.images }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=ref,event=tag
+    - name: Build
+      id: build
+      uses: docker/build-push-action@v5
+      with:
+        push: false
+        tags: ${{ steps.meta.outputs.tags }}
