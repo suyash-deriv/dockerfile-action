@@ -48,6 +48,7 @@ runs:
       id: build
       uses: docker/build-push-action@v5
       with:
+        load: true
         push: ${{ inputs.push }}
         tags: ${{ steps.meta.outputs.tags }}
     - name: Run Trivy vulnerability scanner
