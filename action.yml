@@ -49,7 +49,7 @@ runs:
       uses: docker/build-push-action@v5
       with:
         load: true
-        push: ${{ inputs.push }}
+        push: false
         tags: ${{ steps.meta.outputs.tags }}
     - name: Run Trivy vulnerability scanner
       uses: aquasecurity/trivy-action@master
@@ -63,3 +63,8 @@ runs:
         severity: 'CRITICAL,HIGH'
         hide-progress: true
         scanners: 'vuln,secret,config'
+    - name: Push image is required
+      uses: docker/build-push-action@v5
+      with:
+        push: ${{ inputs.push }}
+        tags: ${{ steps.meta.outputs.tags }}
