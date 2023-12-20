@@ -15,6 +15,14 @@ inputs:
   password:
     description: 'Password or personal access token used to log against the Docker registry'
     required: false
+  dockerfile:
+    description: "Path to the Dockerfile"
+    required: false
+    default: './Dockerfile'
+  context:
+    description: "Build's context is the set of files located in the specified PATH or URL"
+    required: false
+    default: '.'
 outputs:
   imageid:
     description: 'Image ID'
@@ -50,6 +58,8 @@ runs:
       with:
         load: true
         push: false
+        file: ${{ inputs.dockerfile }}
+        context: ${{ inputs.context }}
         tags: ${{ steps.meta.outputs.tags }}
     - name: Run Trivy vulnerability scanner
       uses: aquasecurity/trivy-action@master
@@ -66,5 +76,7 @@ runs:
     - name: Push image is required
       uses: docker/build-push-action@v5
       with:
+        context: ${{ inputs.context }}
+        file: ${{ inputs.dockerfile }}
         push: ${{ inputs.push }}
         tags: ${{ steps.meta.outputs.tags }}
