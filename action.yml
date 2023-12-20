@@ -1,19 +1,19 @@
-name: 'Dockerfile Check, Build and Push'
-description: 'A standard Dockerfile workflow to check the dockerfile against standards and build the image. It can also push images to docker hub.'
-author: 'Deriv.com'
+name: "Dockerfile Check, Build and Push"
+description: "A standard Dockerfile workflow to check the dockerfile against standards and build the image. It can also push images to docker hub."
+author: "Deriv.com"
 inputs:
   images:
-    description: 'Image name'
+    description: "Image name"
     required: true
   push:
-    description: 'Boolean to represent if we want to Push image to a Docker registry'
+    description: "Boolean to represent if we want to Push image to a Docker registry"
     required: false
-    default: 'false'
+    default: "false"
   username:
-    description: 'Username used to log against the Docker registry'
+    description: "Username used to log against the Docker registry"
     required: false
   password:
-    description: 'Password or personal access token used to log against the Docker registry'
+    description: "Password or personal access token used to log against the Docker registry"
     required: false
   dockerfile:
     description: "Path to the Dockerfile"
@@ -23,13 +23,45 @@ inputs:
     description: "Build's context is the set of files located in the specified PATH or URL"
     required: false
     default: '.'
+  project_type:
+    description: "Project type"
+    required: true
+    default: "stop"
 outputs:
   imageid:
-    description: 'Image ID'
+    description: "Image ID"
     value: ${{ steps.build.imageid }}
 runs:
   using: "composite"
   steps:
+    - name: Check Project Dependencies
+      run: |
+        project_type="${{ inputs.project_type }}"
+        check_dependency_file() {
+            local dependency_file=$1
+            if [ -f $dependency_file ]; then
+                echo "$project_type dependency file '$dependent_file' found."        
+            else
+                echo "$project_type dependency file '$dependent_file' not found."
+                if find . -iname "$dependency_file" -print | grep -q . ; then
+                    echo "Dependency file found in subdirectory. Update the relative path in the Dockerfile."
+                    find . -iname "$dependency_file" -print
+                    exit 1
+                fi
+                exit 1
+            fi
+        } 
+        case "$project_type" in
+            "py") dependent_file="requirements.txt"; check_dependency_file "$dependent_file" ;;
+            "node") dependent_file="package.json"; check_dependency_file "$dependent_file" ;;
+            "go") dependent_file="go.mod"; check_dependency_file "$dependent_file" ;;
+            "perl") dependent_file="cpanfile"; check_dependency_file "$dependent_file";;
+            "skip") echo "Skipping dependency validation" && : ;;
+            *) echo "No dependency file check for project type: $project_type" ;;
+        esac
+      shell: bash
+      env:
+        project_type: ${{ inputs.project_type }}   
     - name: Linter for Dockerfile
       uses: hadolint/hadolint-action@v3.1.0
       with:
@@ -66,13 +98,13 @@ runs:
       with:
         image-ref: ${{ inputs.images }}:${{ github.sha }}
         scan-type: image
-        format: 'table'
-        exit-code: '1'
+        format: "table"
+        exit-code: "1"
         ignore-unfixed: true
-        vuln-type: 'os,library'
-        severity: 'CRITICAL,HIGH'
+        vuln-type: "os,library"
+        severity: "CRITICAL,HIGH"
         hide-progress: true
-        scanners: 'vuln,secret,config'
+        scanners: "vuln,secret,config"
     - name: Push image is required
       uses: docker/build-push-action@v5
       with:
