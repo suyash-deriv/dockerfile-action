@@ -47,9 +47,7 @@ runs:
         esac
       shell: bash
       env:
-        project_type: ${{ inputs.project_type }}
-      with:
-        project_type: ${{ inputs.project_type }}        
+        project_type: ${{ inputs.project_type }}   
     - name: Linter for Dockerfile
       uses: hadolint/hadolint-action@v3.1.0
       with:
