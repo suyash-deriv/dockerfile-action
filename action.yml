@@ -15,10 +15,18 @@ inputs:
   password:
     description: "Password or personal access token used to log against the Docker registry"
     required: false
+  dockerfile:
+    description: "Path to the Dockerfile"
+    required: false
+    default: './Dockerfile'
+  context:
+    description: "Build's context is the set of files located in the specified PATH or URL"
+    required: false
+    default: '.'
   project_type:
-    description: "Project type"
+    description: "Type of the project: python, node, go or perl. Use skip to ignore this check."
     required: true
-    default: "stop"
+    default: "unknown"
 outputs:
   imageid:
     description: "Image ID"
@@ -28,13 +36,12 @@ runs:
   steps:
     - name: Check Project Dependencies
       run: |
-        project_type="${{ inputs.project_type }}"
         check_dependency_file() {
-            local dependency_file=$1
+            local dependency_file="$CONTEXT/$1"
             if [ -f $dependency_file ]; then
-                echo "$project_type dependency file '$dependent_file' found."        
+                echo "$PROJECT_TYPE dependency file '$dependent_file' found."        
             else
-                echo "$project_type dependency file '$dependent_file' not found."
+                echo "$PROJECT_TYPE dependency file '$dependent_file' not found."
                 if find . -iname "$dependency_file" -print | grep -q . ; then
                     echo "Dependency file found in subdirectory. Update the relative path in the Dockerfile."
                     find . -iname "$dependency_file" -print
@@ -43,21 +50,22 @@ runs:
                 exit 1
             fi
         } 
-        case "$project_type" in
-            "py") dependent_file="requirements.txt"; check_dependency_file "$dependent_file" ;;
+        case "$PROJECT_TYPE" in
+            "python") dependent_file="requirements.txt"; check_dependency_file "$dependent_file" ;;
             "node") dependent_file="package.json"; check_dependency_file "$dependent_file" ;;
             "go") dependent_file="go.mod"; check_dependency_file "$dependent_file" ;;
             "perl") dependent_file="cpanfile"; check_dependency_file "$dependent_file";;
             "skip") echo "Skipping dependency validation" && : ;;
-            *) echo "No dependency file check for project type: $project_type" ;;
+            *) echo "No dependency file found for project type: $PROJECT_TYPE. Supported project types: python, go, node or perl. Set project_type as skip to ignore this test." && exit 1 ;;
         esac
       shell: bash
       env:
-        project_type: ${{ inputs.project_type }}   
+        PROJECT_TYPE: ${{ inputs.project_type }}
+        CONTEXT: ${{ inputs.context }}
     - name: Linter for Dockerfile
       uses: hadolint/hadolint-action@v3.1.0
       with:
-        dockerfile: Dockerfile
+        dockerfile: ${{ inputs.dockerfile }}
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
     - name: Docker meta
@@ -82,6 +90,8 @@ runs:
       with:
         load: true
         push: false
+        file: ${{ inputs.dockerfile }}
+        context: ${{ inputs.context }}
         tags: ${{ steps.meta.outputs.tags }}
     - name: Run Trivy vulnerability scanner
       uses: aquasecurity/trivy-action@master
@@ -98,5 +108,7 @@ runs:
     - name: Push image is required
       uses: docker/build-push-action@v5
       with:
+        context: ${{ inputs.context }}
+        file: ${{ inputs.dockerfile }}
         push: ${{ inputs.push }}
         tags: ${{ steps.meta.outputs.tags }}
