@@ -24,9 +24,9 @@ inputs:
     required: false
     default: '.'
   project_type:
-    description: "Project type"
+    description: "Type of the project: python, node, go or perl. Use skip to ignore this check."
     required: true
-    default: "stop"
+    default: "unknown"
 outputs:
   imageid:
     description: "Image ID"
@@ -52,12 +52,12 @@ runs:
             fi
         } 
         case "$project_type" in
-            "py") dependent_file="requirements.txt"; check_dependency_file "$dependent_file" ;;
+            "python") dependent_file="requirements.txt"; check_dependency_file "$dependent_file" ;;
             "node") dependent_file="package.json"; check_dependency_file "$dependent_file" ;;
             "go") dependent_file="go.mod"; check_dependency_file "$dependent_file" ;;
             "perl") dependent_file="cpanfile"; check_dependency_file "$dependent_file";;
             "skip") echo "Skipping dependency validation" && : ;;
-            *) echo "No dependency file check for project type: $project_type" ;;
+            *) echo "No dependency file check for project type: $project_type. Supported project types: python, go, node or perl. Set project_type as skip to ignore this test." && exit 1 ;;
         esac
       shell: bash
       env:
