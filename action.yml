@@ -37,14 +37,14 @@ runs:
     - name: Check Project Dependencies
       run: |
         check_dependency_file() {
-            local dependency_file=$1
+            local dependency_file="$CONTEXT/$1"
             if [ -f $dependency_file ]; then
                 echo "$PROJECT_TYPE dependency file '$dependent_file' found."        
             else
                 echo "$PROJECT_TYPE dependency file '$dependent_file' not found."
-                if find "$CONTEXT" -iname "$dependency_file" -print | grep -q . ; then
+                if find . -iname "$dependency_file" -print | grep -q . ; then
                     echo "Dependency file found in subdirectory. Update the relative path in the Dockerfile."
-                    find "$CONTEXT" -iname "$dependency_file" -print
+                    find . -iname "$dependency_file" -print
                     exit 1
                 fi
                 exit 1
