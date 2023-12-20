@@ -15,6 +15,10 @@ inputs:
   password:
     description: "Password or personal access token used to log against the Docker registry"
     required: false
+  project_type:
+    description: "Project type"
+    required: true
+    default: "stop"
 outputs:
   imageid:
     description: "Image ID"
@@ -34,7 +38,9 @@ runs:
                 if find . -iname "$dependency_file" -print | grep -q . ; then
                     echo "Dependency file found in subdirectory. Update the relative path in the Dockerfile."
                     find . -iname "$dependency_file" -print
-                fi 
+                    exit 1
+                fi
+                exit 1
             fi
         } 
         case "$project_type" in
