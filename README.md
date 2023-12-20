@@ -48,15 +48,16 @@ jobs:
 
 You can customize the workflow by modifying the `with` section of the "Check and build Docker Image" step in the YAML file. Here are some key parameters you can adjust:
 
-- `images`: Replace `suyashderiv/sample-app` with the name of your Docker image.
-- `push`: Set this to `true` if you want to push the Docker image to a registry; otherwise, set it to `false`.
-- `dockerfile`: `./` If the Dockerfile is not located in the root directory.
-- `context`: `./` Directory where Dokerfile is present
-- `username` and `password`: Replace `${{ secrets.DOCKER_USERNAME }}` and `${{ secrets.DOCKER_password }}` with your Docker registry credentials.
-- `project_type`: Customize this parameter according to your project's needs. Can be any one of the following.
-    - python
-    - go
-    - perl
-    - node
+
+| Field          | Allowed Values                         | Mandatory |
+|----------------|---------------------------------------|-----------|
+| `images`       | Replace with your Docker image name   |   ✔️     |
+| `push`         | `true` (to push to registry), `false` (otherwise) |   ✔️     |
+| `dockerfile`   | Path to your Dockerfile (e.g., `./`)  |   ❌     |
+| `context`      | Directory where Dockerfile is present |   ❌     |
+| `username`     | Replace with your Docker registry username |   ✔️     |
+| `password`     | Replace with your Docker registry password |   ✔️     |
+| `project_type` | Customizable project type: `python`, `go`, `perl`, `node`, etc. |   ❌     |
+
 
 Use `project_type`: skip if your project type is not applicable to any of the above.
