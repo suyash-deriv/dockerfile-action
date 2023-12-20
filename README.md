@@ -37,7 +37,8 @@ jobs:
 
 4. Save the changes to the repository.
 
-5. Ensure that you have the necessary Docker registry credentials (Docker username and password) set as GitHub secrets. Replace `${{ secrets.DOCKER_USERNAME }}` and `${{ secrets.DOCKER_password }}` in the workflow with your actual secret names.
+5. Ensure that you have the necessary Docker registry credentials (Docker username and password) set as GitHub secrets. 
+    - Replace `${{ secrets.DOCKER_USERNAME }}` and `${{ secrets.DOCKER_password }}` in the workflow with your actual secret names.
 
 6. Push the changes to the `main` branch of your repository.
 
@@ -51,8 +52,9 @@ You can customize the workflow by modifying the `with` section of the "Check and
 - `push`: Set this to `true` if you want to push the Docker image to a registry; otherwise, set it to `false`.
 - `username` and `password`: Replace `${{ secrets.DOCKER_USERNAME }}` and `${{ secrets.DOCKER_password }}` with your Docker registry credentials.
 - `project_type`: Customize this parameter according to your project's needs. Can be any one of the following.
-        - py
-        - go
-        - perl
-        - node
-    use `project_type`: skip if your project type is not applicable to any of the above.
+    - py
+    - go
+    - perl
+    - node
+
+Use `project_type`: skip if your project type is not applicable to any of the above.
