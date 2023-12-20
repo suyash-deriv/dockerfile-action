@@ -32,7 +32,7 @@ jobs:
           push: false
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_password }}
-          project_type: py
+          project_type: python
 ```
 
 4. Save the changes to the repository.
@@ -50,9 +50,11 @@ You can customize the workflow by modifying the `with` section of the "Check and
 
 - `images`: Replace `suyashderiv/sample-app` with the name of your Docker image.
 - `push`: Set this to `true` if you want to push the Docker image to a registry; otherwise, set it to `false`.
+- `dockerfile`: `./` If the Dockerfile is not located in the root directory.
+- `context`: `./` Directory where Dokerfile is present
 - `username` and `password`: Replace `${{ secrets.DOCKER_USERNAME }}` and `${{ secrets.DOCKER_password }}` with your Docker registry credentials.
 - `project_type`: Customize this parameter according to your project's needs. Can be any one of the following.
-    - py
+    - python
     - go
     - perl
     - node
