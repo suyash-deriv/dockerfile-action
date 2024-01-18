@@ -142,42 +142,39 @@ docker_check(){
 
 # Docker Lint
 docker_lint() {
-    local DOCKER_FILE="${1}"
     docker run --rm -i "${DOCKER_LINT_IMAGE}" < "${DOCKER_FILE}"
     logger "$?" "Docker Lint"
 }
 
 
-# Docker Build
-docker_build() {
+# Docker Build and Tag
+docker_build_tag() {
     ##docker buildx create --use
-    docker build -t ${1}
+    docker build --load --file "${DOCKER_FILE}" --tag "${DOCKER_IMAGE}" .
     logger "$?" "Docker Build"
-}
-
-
-# Docker Tag
-docker_tag(){
-    local DOCKER_IMAGE="${1}"
-    export DOCKER_BUILD_RESULT=$(docker buildx build --load --file "${DOCKER_FILE}" --tag "${DOCKER_IMAGE}" "$DOCKER_CONTEXT")
-    logger "$?" "Docker Tagged: ${DOCKER_BUILD_RESULT}"
 }
 
 
 # Docker Image Scan post build
 docker_scan() {
-    docker run --rm "${DOCKER_SCAN_IMAGE}" image-ref="${DOCKER_IMAGE}:${DOCKER_BUILD_RESULT##*:}" scan-type=image format="table" exit-code="1" ignore-unfixed=true vuln-type="os,library" severity="CRITICAL,HIGH" hide-progress=true scanners="vuln,secret,config"
-    logger "$?" "Docker Scan"
+    if [ "${1}" == "true" ]; then
+        docker run --rm "${DOCKER_SCAN_IMAGE}" image-ref="${DOCKER_IMAGE}:${DOCKER_BUILD_RESULT##*:}" scan-type=image format="table" exit-code="1" ignore-unfixed=true vuln-type="os,library" severity="CRITICAL,HIGH" hide-progress=true scanners="vuln,secret,config"
+        logger "$?" "Docker Scan"
+    else
+        logger "info" "Docker Scan Skipped as input is set to false"
+    fi
 }
 
 
 # Docker Push to Registry
 docker_push() {
-    if [ ! -z ${1} ]; then
+    if [ "${1}" == "true" ]; then
         echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin
         logger "$?" "Docker Login"
         docker buildx build --file "${DOCKER_FILE}" --push --tag "${DOCKER_CONTEXT}"
         logger "$?" "Docker Push"
+    else
+        logger "info" "Docker Push Skipped as input is set to false"
     fi
 }
 
@@ -232,7 +229,7 @@ input_usage_fetch() {
             -dc|--docker-context)
                 case "$2" in
                     -*) echo "${YELLOWC}Missing Parameter:${NOC} -dc|--docker-context <docker_context>"; input_usage ;;
-                    *) if [ -z "$2" ] || [ ! -s "$2" ]; then echo "${YELLOWC}Missing Parameter:${NOC} [Example: -dc <docker_context> ]"; input_usage; fi; export DOCKER_CONTEXT=${2-.}; shift 2 ;;
+                    *) if [ -z "$2" ] || [ ! -s "$2" ]; then echo "${YELLOWC}Missing Parameter:${NOC} [Example: -dc <docker_context> ]"; input_usage; fi; export DOCKER_CONTEXT=${2-""}; shift 2 ;;
                 esac
                 ;;
             -f|--force) FORCE="true"
@@ -282,13 +279,12 @@ mkdir -p "${TEMP_DIR}" && export LOG_FILE="${TEMP_DIR}/build.log"
 logger "info" "Log File Created: ${LOG_FILE}"
 if [[ "$FORCE" != "true" ]]; then confirm_user_input; fi
 ##validate_dependency # Disabled / Need to discuss further on this
+pattern_divider
 docker_check
 pattern_divider
-docker_lint "${DOCKER_FILE}"
+docker_lint
 pattern_divider
-docker_build "${DOCKER_IMAGE}"
-pattern_divider
-docker_tag "${DOCKER_IMAGE}"
+docker_build_tag
 pattern_divider
 docker_scan "${DOCKER_SCAN}"
 pattern_divider
