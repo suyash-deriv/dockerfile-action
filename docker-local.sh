@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 
-##set -Eeuxo pipefail
 
 ###################################################################################################################################################################################
 #                                                                                                                                                                                 #
@@ -10,13 +9,13 @@
 # Created           : 18/Jan/2024                                                                                                                                                 #
 # Last Update       : Jan 2024                                                                                                                                                    #
 # Script Location   : https://github.com/arun-ms-deriv/dockerfile-action/blob/main/docker-local.sh                                                                                #
-# WikiJs Link       :                                                                                                                                                             #
+# WikiJs Link       : <Need to update later>                                                                                                                                                            #
 #                                                                                                                                                                                 #
 #---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------#
 #                                                                                                                                                                                 #
-# Syntax : ./docker-local.sh [-di|--docker-image] <Docker_Image> [-du|--docker-username] <Docker_Username> [-dp|--docker-password)] <Docker_Password> \                           #
-#                            [-df|--docker-file)] <Docker_File> [-ds|--docker-scan )] <true/false> [-dpu|--docker-push)] <true/false> \                                           #
-#                            [-dc|--docker-context)] <true/false> [-dc|--project-type)] <true/false> [-f|--force]                                                                 #
+# Syntax : ./docker-local.sh [-di|--docker-image <Docker_Image>] [-du|--docker-username <Docker_Username>] [-dp|--docker-password <Docker_Password>] \                           #
+#                            [-df|--docker-file) <Docker_File>] [-ds|--docker-scan <true/false>] [-dpu|--docker-push] <true/false>] \                                           #
+#                            [-dc|--docker-context <test_path>] [-dc|--project-type <perl/python/go/node/skip>] [-f|--force]                                                                 #
 #                                                                                                                                                                                 #
 #                            -di (or) --docker-image     # Docker full image name                                                                                                 #
 #                            -du (or) --docker-username  # username used to login against the Docker registry                                                                     #
@@ -44,18 +43,27 @@ export WORKSPACE_DIR="$(dirname $(readlink -f $0))"
 export DOCKER_REGISTRY="docker.io"
 export DOCKER_LINT_IMAGE="hadolint/hadolint:latest"
 export DOCKER_SCAN_IMAGE="aquasecurity/trivy-action:master"
+export DOCKER_BUILD_PLATFORM="linux/amd64"
+export LOG_RETENTION="15"
+
+# Defaults / Can be overridden from arguments
+export FORCE="false"
+export PROJECT_TYPE="skip"
+export DOCKER_CONTEXT=""
 
 
 # Color Codes Declarations
-export REDC="\033[0;31m"
-export GREENC="\033[0;32m"
-export YELLOWC="\033[1;33m"
-export NOC="\033[0m" # No Color
+export REDC='\033[0;31m'
+export GREENC='\033[0;32m'
+export YELLOWC='\033[1;33m'
+export NOC='\033[0m' # No Color
 
 
 # Temporary Files Clean-up
 temp_cleanup() {
-    rm -rf "${TEMP_DIR}" > /dev/null 2>&1
+    #rm -rf "${TEMP_DIR}" > /dev/null 2>&1
+    find "${TEMP_DIR}/" -type f -name "*.log" -mtime "+${LOG_RETENTION}" -exec rm -rvf {} \; 2>/dev/null || echo
+    echo -e "Remove logs older than ${LOG_RETENTION} under ${TEMP_DIR}/*.log"
 }
 
 
@@ -69,7 +77,7 @@ trap exit_cleanup EXIT
 
 # Output Divider
 pattern_divider() {
-    COLUMNS=$(tput cols 2>/dev/null); if [ -z "$COLUMNS" ]; then COLUMNS="100"; fi; printf "\n\r%*s\r%s\n" $COLUMNS "#" "#" | tr " " "-"
+    COLUMNS=$(tput cols 2>/dev/null); if [ -z "$COLUMNS" ]; then COLUMNS="100"; fi; printf "\r%*s\r%s\n" $COLUMNS "#" "#" | tr " " "-"
 }
 
 
@@ -79,13 +87,13 @@ logger() {
     LOG_MSG="${2}"
     case "${TYPE}" in
         info)
-            echo "[$(date +'%Y-%m-%d %H:%M:%S %Z %z')] [INFO] : $LOG_MSG" ;;
+            echo -e "[$(date +'%Y-%m-%d %H:%M:%S %Z %z')] ${NOC}[INFO]${NOC}\t : $LOG_MSG" | tee -a "${LOG_FILE}";;
         success|0)
-            echo "[$(date +'%Y-%m-%d %H:%M:%S %Z %z')] [SUCCESS] : $LOG_MSG" ;;
+            echo -e "[$(date +'%Y-%m-%d %H:%M:%S %Z %z')] ${GREENC}[SUCCESS]${NOC}: $LOG_MSG" | tee -a "${LOG_FILE}" ;;
         warning)
-            echo "[$(date +'%Y-%m-%d %H:%M:%S %Z %z')] [WARNING] : $LOG_MSG" ;;
+            echo -e "[$(date +'%Y-%m-%d %H:%M:%S %Z %z')] ${YELLOWC}[WARNING]${NOC}: $LOG_MSG" | tee -a "${LOG_FILE}" ;;
         error|[1-9]|[1-9][1-9]|[1-9][1-9][1-9])
-            echo "[$(date +'%Y-%m-%d %H:%M:%S %Z %z')] [ERROR] : $LOG_MSG" ;;
+            echo -e "[$(date +'%Y-%m-%d %H:%M:%S %Z %z')] ${REDC}[ERROR]${NOC}: $LOG_MSG" | tee -a "${LOG_FILE}" ;;
      esac
 }
 
@@ -93,11 +101,20 @@ logger() {
 # Input Values Pre-Check
 input_usage() {
     pattern_divider
-    printf "\nHelp\t\t: ./$(basename $0) [-h|--help] (Display help message)\n"
-    printf "\nInput Usage\t: ./$(basename $0) [-di|--docker-image] <Docker_Image> [-du|--docker-username] <Docker_Username> [-dp|--docker-password)] <Docker_Password> \\
-                         [-df|--docker-file)] <Docker_File> [-ds|--docker-scan )] <true/false> [-dpu|--docker-push)] <true/false> \\
-                         [-dc|--docker-context)] <true/false> [-dc|--project-type)] <true/false> [-f|--force]\n"
-    printf "\nExample\t\t: ./docker-local.sh -di testimage:latest -du docker_username -dp ******* -df ./Dockerfile -ds false -dpu false -dc ./context.txt -pt skip --force\n"
+    echo -e "\nHelp\t\t: ./$(basename $0) [-h|--help] (Display help message)\n"
+    echo -e "\nInput Usage\t: ./$(basename $0) [-di|--docker-image] <Docker_Image> [-du|--docker-username] <Docker_Username> [-dp|--docker-password)] <Docker_Password> \\
+                                    [-df|--docker-file)] <Docker_File> [-ds|--docker-scan )] <true/false> [-dpu|--docker-push)] <true/false> \\
+                                    [-dc|--docker-context)] <true/false> [-dc|--project-type)] <true/false> [-f|--force]\n
+                -di (or) --docker-image     # Docker full image name
+                -du (or) --docker-username  # username used to login against the Docker registry
+                -dp (or) --docker-password  # Password or personal access token used to login against the Docker registry
+                -df (or) --docker-file      # Path to the Dockerfile
+                -ds (or) --docker-scan      # Boolean if we want to Scan the Docker image. Default: false
+                -dpu(or) --docker-push      # Boolean to represent if we want to Push image to a Docker registry
+                -dc (or) --docker-context   # Build's context is the set of files located in the specified PATH or URL
+                -pt (or) --project-type     # Type of the project: python, node, go or perl. Use skip to ignore this check
+                -f  (or) --force            # Force with no-prompt\n"
+    echo -e "\nExample\t\t: ./docker-local.sh -di testimage:latest -du docker_username -dp ******* -df ./Dockerfile -ds false -dpu false -dc ./context.txt -pt skip --force"
     echo; pattern_divider; echo && exit 1;
 }
 
@@ -136,7 +153,7 @@ validate_dependency() {
 # Docker Install / status check
 docker_check(){
     if ! docker info &> /dev/null; then logger "error" "Error: Docker is not installed / daemon is not running or not accessible."; fi
-    logger "$?" "Docker Check"
+    logger "$?" "Docker Install / Running Check"
 }
 
 
@@ -147,11 +164,24 @@ docker_lint() {
 }
 
 
-# Docker Build and Tag
-docker_build_tag() {
+# Docker Build
+docker_build() {
     ##docker buildx create --use
-    docker build --load --file "${DOCKER_FILE}" --tag "${DOCKER_IMAGE}" .
+    docker build --platform "${DOCKER_BUILD_PLATFORM}" --file "${DOCKER_FILE}" --tag "${DOCKER_IMAGE}" .
     logger "$?" "Docker Build"
+}
+
+
+# Docker Tag
+docker_tag() {
+    docker tag "${DOCKER_IMAGE}" "${DOCKER_REGISTRY}/${DOCKER_IMAGE}"
+    if [[ "${DOCKER_REGISTRY}" == "docker.io" ]]; then
+        DOCKER_TAG_FULL="${DOCKER_IMAGE}"
+    else
+        DOCKER_TAG_FULL="${DOCKER_REGISTRY}/${DOCKER_IMAGE}"
+    fi
+    docker images ${DOCKER_TAG_FULL} --format table
+    logger "$?" "Docker Tag - ${DOCKER_TAG_FULL}"
 }
 
 
@@ -181,65 +211,70 @@ docker_push() {
 
 # Fetching Input Details
 input_usage_fetch() {
-    if [ $# -eq 0 ]; then printf "Help:\t\t${WORKSPACE_DIR}/$(basename $0) [-h|--help] (Display help message)\n\n"; exit 1; fi
+    if [ $# -eq 0 ]; then input_usage; exit 1; fi
     while [ $# -gt 0 ]; do
         case "$1" in
             -di|--docker-image)
                 case "$2" in
-                    -*) echo "${YELLOWC}Missing Parameter:${NOC} -di|--docker-image <Docker Image>"; input_usage ;;
-                    *) if [ -z "$2" ]; then echo "${YELLOWC}Missing Parameter: ${NOC} -di|--docker-image requires a docker image name. Example [my-app:latest / my-app:$(date +'%Y.%m.00.001')]"; input_usage; fi; export DOCKER_IMAGE=$2; shift 2 ;;
+                    -*) echo -e "${YELLOWC}Missing Parameter:${NOC} -di|--docker-image <Docker Image>"; input_usage ;;
+                    *) if [ -z "$2" ]; then echo -e "${YELLOWC}Missing Parameter: ${NOC} -di|--docker-image requires a docker image name. Example [my-app:latest / my-app:$(date +'%Y.%m.00.001')]"; input_usage; fi; export DOCKER_IMAGE=$2; shift 2 ;;
                 esac
                 ;;
             -du|--docker-username)
                 case "$2" in
-                    -*) echo "${YELLOWC}Missing Parameter:${NOC} -du|--docker-username <docker_username>"; input_usage ;;
-                    *) if [ -z "$2" ]; then echo "${YELLOWC}Missing Parameter:${NOC} [Example: -du <docker_username> ]"; input_usage; fi; export DOCKER_USERNAME=$2; shift 2 ;;
+                    -*) echo -e "${YELLOWC}Missing Parameter:${NOC} -du|--docker-username <docker_username>"; input_usage ;;
+                    *) if [ -z "$2" ]; then echo -e "${YELLOWC}Missing Parameter:${NOC} [Example: -du <docker_username> ]"; input_usage; fi; export DOCKER_USERNAME=$2; shift 2 ;;
                 esac
                 ;;
             -dp|--docker-password)
                 case "$2" in
-                    -*) echo "${YELLOWC}Missing Parameter:${NOC} -dp|--docker-password <docker_password>"; input_usage ;;
-                    *) if [ -z "$2" ]; then echo "${YELLOWC}Missing Parameter:${NOC} [Example: -dp <docker_password> ]"; input_usage; fi; export DOCKER_PASSWORD=$2; shift 2 ;;
+                    -*) echo -e "${YELLOWC}Missing Parameter:${NOC} -dp|--docker-password <docker_password>"; input_usage ;;
+                    *) if [ -z "$2" ]; then echo -e "${YELLOWC}Missing Parameter:${NOC} [Example: -dp <docker_password> ]"; input_usage; fi; export DOCKER_PASSWORD=$2; shift 2 ;;
                 esac
                 ;;
             -df|--docker-file)
                 case "$2" in
-                    -*) echo "${YELLOWC}Missing Parameter:${NOC} -df|--docker-file <docker_file>"; input_usage ;;
-                    *) if [ -z "$2" ]; then echo "${YELLOWC}Missing Parameter:${NOC} [Example: -df <file> ]"; input_usage; fi; export DOCKER_FILE=${2:-./Dockerfile}; shift 2 ;;
+                    -*) echo -e "${YELLOWC}Missing Parameter:${NOC} -df|--docker-file <docker_file>"; input_usage ;;
+                    *) if [ -z "$2" ]; then echo -e "${YELLOWC}Missing Parameter:${NOC} [Example: -df <file> ]"; input_usage; fi; export DOCKER_FILE=${2:-./Dockerfile}; shift 2 ;;
                 esac
                 ;;
             -ds|--docker-scan)
                 case "$2" in
-                    -*) echo "${YELLOWC}Missing Parameter:${NOC} -ds|--docker-scan <docker_scan>"; input_usage ;;
-                    *) if [ -z "$2" ]; then echo "${YELLOWC}Missing Parameter:${NOC} [Example: -ds <docker_scan> ]"; input_usage; fi; export DOCKER_SCAN=${2:-false}; shift 2 ;;
+                    -*) echo -e "${YELLOWC}Missing Parameter:${NOC} -ds|--docker-scan <docker_scan>"; input_usage ;;
+                    *) if [ -z "$2" ]; then echo -e "${YELLOWC}Missing Parameter:${NOC} [Example: -ds <docker_scan> ]"; input_usage; fi; export DOCKER_SCAN=${2:-false}; shift 2 ;;
                 esac
                 ;;
             -dpu|--docker-push)
                  case "$2" in
-                    -*) echo "${YELLOWC}Missing Parameter:${NOC} -dpu|--docker-push <docker_push>"; input_usage ;;
-                    *) if [ -z "$2" ]; then echo "${YELLOWC}Missing Parameter:${NOC} [Example: -dpu <docker_push> ]"; input_usage; fi; export DOCKER_PUSH=${2:-false}; shift 2 ;;
+                    -*) echo -e "${YELLOWC}Missing Parameter:${NOC} -dpu|--docker-push <docker_push>"; input_usage ;;
+                    *) if [ -z "$2" ]; then echo -e "${YELLOWC}Missing Parameter:${NOC} [Example: -dpu <docker_push> ]"; input_usage; fi; export DOCKER_PUSH=${2:-false}; shift 2 ;;
                 esac
                 ;;
             -pt|--project-type)
                 case "$2" in
-                    -*) echo "${YELLOWC}Missing Parameter:${NOC} -pt|--project-type"; input_usage ;;
-                    *) if [ -z "$2" ]; then echo "${YELLOWC}Missing Parameter:${NOC} -pt|--project-type"; input_usage; fi; export PROJECT_TYPE=${2:-unknown}; shift 2 ;;
+                    -*) echo -e "${YELLOWC}Missing Parameter:${NOC} -pt|--project-type"; input_usage ;;
+                    *) if [ -z "$2" ]; then echo -e "${YELLOWC}Missing Parameter:${NOC} -pt|--project-type"; input_usage; fi; export PROJECT_TYPE=${2:-unknown}; shift 2 ;;
                 esac
                 ;;
             -dc|--docker-context)
                 case "$2" in
-                    -*) echo "${YELLOWC}Missing Parameter:${NOC} -dc|--docker-context <docker_context>"; input_usage ;;
-                    *) if [ -z "$2" ] || [ ! -s "$2" ]; then echo "${YELLOWC}Missing Parameter:${NOC} [Example: -dc <docker_context> ]"; input_usage; fi; export DOCKER_CONTEXT=${2-""}; shift 2 ;;
+                    -*) echo -e "${YELLOWC}Missing Parameter:${NOC} -dc|--docker-context <docker_context>"; input_usage ;;
+                    *) if [ -z "$2" ] || [ ! -s "$2" ]; then echo -e "${YELLOWC}Missing Parameter:${NOC} [Example: -dc <docker_context> ]"; input_usage; fi; export DOCKER_CONTEXT=${2-""}; shift 2 ;;
                 esac
                 ;;
-            -f|--force) FORCE="true"
+            -f|--force)
+                export FORCE="true"
+                shift
+                ;;
+            -d|--debug)
+                export DEBUG="true"
                 shift
                 ;;
             -h|--help)
                 input_usage;
                 ;;
             *)
-                echo; echo "The input parameters are not valid. Please refer below syntax."
+                echo; echo -e "${YELLOWC}The input parameters are not valid. Please refer below syntax${NOC}"
                 input_usage;
                 ;;
         esac
@@ -250,20 +285,20 @@ input_usage_fetch() {
 # Function to Confirm User Input
 confirm_user_input() {
     while true; do
-        echo; echo "Are you sure do you want to Proceed with Docker Build with inputs below?";
-        echo -e "\nDOCKER_IMAGE\t: ${DOCKER_IMAGE}
-DOCKER_USERNAME\t: ${DOCKER_USERNAME}
-DOCKER_PASSWORD\t: ***********
-DOCKER_FILE\t: ${DOCKER_FILE}
-DOCKER_SCAN\t: ${DOCKER_SCAN}
-DOCKER_PUSH\t: ${DOCKER_PUSH}
-PROJECT_TYPE\t: ${PROJECT_TYPE}
-DOCKER_CONTEXT\t: ${DOCKER_CONTEXT}"
-echo; echo "Enter \"y\" or \"n\""; echo
+        echo; echo -e "${YELLOWC}Are you sure do you want to Proceed with Docker Build with inputs below?${NOC}";
+        echo -e "\nDOCKER_IMAGE\t: ${GREENC}${DOCKER_IMAGE}${NOC}
+DOCKER_USERNAME\t: ${GREENC}${DOCKER_USERNAME}${NOC}
+DOCKER_PASSWORD\t: ${GREENC}***********${NOC}
+DOCKER_FILE\t: ${GREENC}${DOCKER_FILE}${NOC}
+DOCKER_SCAN\t: ${GREENC}${DOCKER_SCAN}${NOC}
+DOCKER_PUSH\t: ${GREENC}${DOCKER_PUSH}${NOC}
+PROJECT_TYPE\t: ${GREENC}${PROJECT_TYPE}${NOC}
+DOCKER_CONTEXT\t: ${GREENC}${DOCKER_CONTEXT}${NOC}"
+echo; echo -e "Enter \"${GREENC}y${NOC}\" or \"${GREENC}n${NOC}\""; echo
         read YES_NO_USER && echo ""
         case "$YES_NO_USER" in
             ([yY][eE][sS]|[yY]) break; ;;
-            ([nN][oO]|[nN])     echo; echo "${YELLOWC}Exiting...${NOC}"; echo; temp_cleanup && exit ;;
+            ([nN][oO]|[nN])     echo; echo -e "${YELLOWC}Exiting...${NOC}"; echo; temp_cleanup && exit ;;
             *) echo; echo "Please answer Yes(y) or No(n)" ;;
         esac
     done
@@ -271,24 +306,28 @@ echo; echo "Enter \"y\" or \"n\""; echo
 
 
 # Main Program - Executes the below functions in sequence order.
-echo; echo "####### Docker Local Setup Tool #######"; echo
+echo; echo -e "${GREENC}####### ${YELLOWC}Docker Local Setup Tool${GREENC} #######${NOC}"; echo
 input_usage_fetch "$@"
-export readonly TEMP_DIR="${WORKSPACE_DIR}/docker_local_tool_archive";
+if [[ ${DEBUG} == "true" ]]; then set -Eeuxo pipefail; fi
+export readonly TEMP_DIR="${WORKSPACE_DIR}/docker_local_tool_logs";
 temp_cleanup
-mkdir -p "${TEMP_DIR}" && export LOG_FILE="${TEMP_DIR}/build.log"
+mkdir -p "${TEMP_DIR}" && export LOG_FILE="${TEMP_DIR}/build-${BUILD_TIME}.log"
 logger "info" "Log File Created: ${LOG_FILE}"
-if [[ "$FORCE" != "true" ]]; then confirm_user_input; fi
+if [[ "${FORCE}" != "true" ]]; then confirm_user_input; fi
 ##validate_dependency # Disabled / Need to discuss further on this
 pattern_divider
 docker_check
 pattern_divider
 docker_lint
 pattern_divider
-docker_build_tag
+docker_build
+pattern_divider
+docker_tag
 pattern_divider
 docker_scan "${DOCKER_SCAN}"
 pattern_divider
 docker_push "${DOCKER_PUSH}"
+pattern_divider
 
 
 #****************************************************************** End of Script ********************************************************************#
