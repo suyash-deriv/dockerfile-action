@@ -14,7 +14,7 @@
 #-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------#
 #                                                                                                                                                                                           #
 # Syntax : ./docker-local.sh [-di|--docker-image <Docker_Image>] [-du|--docker-username <Docker_Username>] [-dp|--docker-password <Docker_Password>] \                                      #
-#                            [-df|--docker-file) <Docker_File>] [-ds|--docker-scan <true/false>] [-dpu|--docker-push] <true/false>] \                                                       #
+#                            [-df|--docker-file <Docker_File>] [-ds|--docker-scan <true/false>] [-dpu|--docker-push <true/false>] \                                                         #
 #                            [-dc|--docker-context <test_path>] [-dc|--project-type <perl/python/go/node/skip>] [-f|--force]                                                                #
 #                                                                                                                                                                                           #
 #                            -di (or) --docker-image     # Docker full image name (required)                                                                                                #
@@ -25,6 +25,7 @@
 #                            -dpu(or) --docker-push      # Boolean to represent if we want to Push image to a Docker registry Default: false (optional)                                     #
 #                            -dc (or) --docker-context   # Build's context is the set of files located in the specified PATH or URL (optional)                                              #
 #                            -pt (or) --project-type     # Type of the project: python, node, go or perl. Use skip to ignore this check (optional)                                          #
+#                            -dpf(or) --dependency-file  # Project Dependency file path (optional)                                                                                          #
 #                            -f  (or) --force            # Force with no-prompt (optional)                                                                                                  #
 #                            -d  (or) --debug            # Enable Debug Mode (optional)                                                                                                     #
 #                                                                                                                                                                                           #
@@ -51,6 +52,7 @@ export LOG_RETENTION="15"
 export FORCE="false"
 export PROJECT_TYPE="skip"
 export DOCKER_CONTEXT=""
+export DEPENDENCY_FILE=""
 
 
 # Color Codes Declarations
@@ -68,12 +70,12 @@ temp_cleanup() {
 }
 
 
-# Auto Clean-up Temp Directory on Exit
-function exit_cleanup() {
-    ##temp_cleanup
-    echo
-}
-trap exit_cleanup EXIT
+# Auto Clean-up Temp Directory on Exit (Un-Comment if required to auto clean-up logs directory on exit)
+## function exit_cleanup() {
+##     temp_cleanup
+##     echo
+## }
+## trap exit_cleanup EXIT
 
 
 # Output Divider
@@ -94,7 +96,7 @@ logger() {
         warning)
             echo -e "[$(date +'%Y-%m-%d %H:%M:%S %Z %z')] ${YELLOWC}[WARNING]${NOC}: $LOG_MSG" | tee -a "${LOG_FILE}" ;;
         error|[1-9]|[1-9][1-9]|[1-9][1-9][1-9])
-            echo -e "[$(date +'%Y-%m-%d %H:%M:%S %Z %z')] ${REDC}[ERROR]${NOC}: $LOG_MSG" | tee -a "${LOG_FILE}" ;;
+            echo -e "[$(date +'%Y-%m-%d %H:%M:%S %Z %z')] ${REDC}[ERROR]${NOC}: $LOG_MSG" | tee -a "${LOG_FILE}"; exit 1;;
      esac
 }
 
@@ -103,49 +105,45 @@ logger() {
 input_usage() {
     pattern_divider
     echo -e "\nHelp\t\t: ./$(basename $0) [-h|--help] (Display help message)\n"
-    echo -e "\nInput Usage\t: ./$(basename $0) [-di|--docker-image] <Docker_Image> [-du|--docker-username] <Docker_Username> [-dp|--docker-password)] <Docker_Password> \\
-                                    [-df|--docker-file)] <Docker_File> [-ds|--docker-scan )] <true/false> [-dpu|--docker-push)] <true/false> \\
-                                    [-dc|--docker-context)] <true/false> [-dc|--project-type)] <true/false> [-f|--force]\n
-                -di (or) --docker-image     # Docker full image name
-                -du (or) --docker-username  # username used to login against the Docker registry
-                -dp (or) --docker-password  # Password or personal access token used to login against the Docker registry
-                -df (or) --docker-file      # Path to the Dockerfile
-                -ds (or) --docker-scan      # Boolean if we want to Scan the Docker image. Default: false
-                -dpu(or) --docker-push      # Boolean to represent if we want to Push image to a Docker registry
-                -dc (or) --docker-context   # Build's context is the set of files located in the specified PATH or URL
-                -pt (or) --project-type     # Type of the project: python, node, go or perl. Use skip to ignore this check
-                -f  (or) --force            # Force with no-prompt
-                -d  (or) --debug            # Enable Debug Mode\n"
+    echo -e "\nInput Usage\t: ./$(basename $0) [-di|--docker-image <Docker_Image>] [-du|--docker-username <Docker_Username>] [-dp|--docker-password <Docker_Password>] \\
+                                    [-df|--docker-file <Docker_File>] [-ds|--docker-scan <true/false>] [-dpu|--docker-push <true/false>] \\
+                                    [-dc|--docker-context <true/false>] [-dc|--project-type <true/false>] [-f|--force]\n
+                -di (or) --docker-image     # Docker full image name (required)
+                -du (or) --docker-username  # username used to login against the Docker registry (optional)
+                -dp (or) --docker-password  # Password or personal access token used to login against the Docker registry (optional)
+                -df (or) --docker-file      # Path to the Dockerfile (required)
+                -ds (or) --docker-scan      # Boolean if we want to Scan the Docker image. Default: false (optional)
+                -dpu(or) --docker-push      # Boolean to represent if we want to Push image to a Docker registry (optional)
+                -dc (or) --docker-context   # Build's context is the set of files located in the specified PATH or URL (optional)
+                -pt (or) --project-type     # Type of the project: python, node, go or perl. Use skip to ignore this check (optional)
+                -dpf(or) --dependency-file  # Project Dependency file path (optional)
+                -f  (or) --force            # Force with no-prompt (optional)
+                -d  (or) --debug            # Enable Debug Mode (optional)\n"
     echo -e "\nExample\t\t: ./docker-local.sh -di testimage:latest -du docker_username -dp ******* -df ./Dockerfile -ds false -dpu false -dc ./context.txt -pt skip --force"
     echo; pattern_divider; echo && exit 1;
 }
 
 
-# Function to check project dependencies
-check_dependency_file() {
-    local dependency_file="${DOCKER_CONTEXT}/${1}"
-    if [ -f "$'{dependency_file}" ]; then
-        echo "${PROJECT_TYPE} dependency file '${dependency_file}' found."
-    else
-        echo "${PROJECT_TYPE} dependency file '${dependency_file}' not found."
-        if find . -iname "${dependency_file}" -print | grep -q .; then
-            echo "Dependency file found in subdirectory. Update the relative path in the Dockerfile."
-            find . -iname "${dependency_file}" -print
-            exit 1
+# Function to check project type and validate it's dependencies
+validate_project_dependency() {
+    check_dependency_file() {
+        if [ -f "$'{DEPENDENCY_FILE}" ]; then
+            logger "info" "${PROJECT_TYPE} dependency file '${DEPENDENCY_FILE}' found"
+        else
+            echo "${PROJECT_TYPE} dependency file '${DEPENDENCY_FILE}' not found."
+            if find . -iname "${DEPENDENCY_FILE}" -print | grep -q .; then
+                find . -iname "${DEPENDENCY_FILE}" -print
+                logger "warning" "Dependency file found in subdirectory. Update the relative path in the Dockerfile."
+            fi
+            logger "warning" "${PROJECT_TYPE} dependency file '${DEPENDENCY_FILE}' not found"
         fi
-        exit 1
-    fi
-}
-
-
-validate_dependency() {
-    # Check project type and validate dependencies
+    }
     case "${PROJECT_TYPE}" in
         python) dependent_file="requirements.txt"; check_dependency_file "${dependent_file}" ;;
         node) dependent_file="package.json"; check_dependency_file "${dependent_file}" ;;
         go) dependent_file="go.mod"; check_dependency_file "${dependent_file}" ;;
         perl) dependent_file="cpanfile"; check_dependency_file "${dependent_file}" ;;
-        custom) dependent_file="cpanfile"; check_dependency_file "${dependent_file}" ;;
+        custom) dependent_file="${DEPENDENCY_FILE}"; check_dependency_file "${dependent_file}" ;;
         skip) echo "Skipping dependency validation" ;;
         *) echo "No dependency file found for project type: ${PROJECT_TYPE}. Supported project types: python, go, node, or perl. Set project_type as skip to ignore this test." && exit 1 ;;
     esac
@@ -168,7 +166,7 @@ docker_lint() {
 
 # Docker Build
 docker_build() {
-    ##docker buildx create --use
+    docker buildx create --use
     docker build --platform "${DOCKER_BUILD_PLATFORM}" --file "${DOCKER_FILE}" --tag "${DOCKER_IMAGE}" .
     logger "$?" "Docker Build"
 }
@@ -264,6 +262,12 @@ input_usage_fetch() {
                     *) if [ -z "$2" ] || [ ! -s "$2" ]; then echo -e "${YELLOWC}Missing Parameter:${NOC} [Example: -dc <docker_context> ]"; input_usage; fi; export DOCKER_CONTEXT=${2-""}; shift 2 ;;
                 esac
                 ;;
+            -dpf|--dependency-file)
+                case "$2" in
+                    -*) echo -e "${YELLOWC}Missing Parameter:${NOC} -dpf|--dependency-file <dependency_file>"; input_usage ;;
+                    *) if [ -z "$2" ] || [ ! -s "$2" ]; then echo -e "${YELLOWC}Missing Parameter:${NOC} [Example: -dc <dependency_file> ]"; input_usage; fi; export DEPENDENCY_FILE=${2-""}; shift 2 ;;
+                esac
+                ;;
             -f|--force)
                 export FORCE="true"
                 shift
@@ -295,7 +299,8 @@ DOCKER_FILE\t: ${GREENC}${DOCKER_FILE}${NOC}
 DOCKER_SCAN\t: ${GREENC}${DOCKER_SCAN}${NOC}
 DOCKER_PUSH\t: ${GREENC}${DOCKER_PUSH}${NOC}
 PROJECT_TYPE\t: ${GREENC}${PROJECT_TYPE}${NOC}
-DOCKER_CONTEXT\t: ${GREENC}${DOCKER_CONTEXT}${NOC}"
+DOCKER_CONTEXT\t: ${GREENC}${DOCKER_CONTEXT}${NOC}
+DEPENDENCY_FILE\t: ${GREENC}${DEPENDENCY_FILE}${NOC}"
 echo; echo -e "Enter \"${GREENC}y${NOC}\" or \"${GREENC}n${NOC}\""; echo
         read YES_NO_USER && echo ""
         case "$YES_NO_USER" in
@@ -321,6 +326,8 @@ pattern_divider
 docker_check
 pattern_divider
 docker_lint
+pattern_divider
+validate_project_dependency
 pattern_divider
 docker_build
 pattern_divider
